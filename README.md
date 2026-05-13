@@ -1,41 +1,59 @@
-# T.I.A.O
-## 1. Conceito do Stand 
-O projeto TIAO consiste em um assistente digital voltado para o pré-atendimento em unidades de saúde, com foco na coleta de dados dos pacientes de forma rápida e organizada. Diferente de sistemas de triagem clínica, o TIAO atua como uma recepcionista digital, sendo responsável por realizar a ficha do paciente antes do atendimento médico. A proposta do stand é apresentar uma experiência prática e interativa, onde o visitante simula um atendimento real, compreendendo como a tecnologia pode agilizar processos, reduzir filas e melhorar a organização do fluxo de pacientes. 
+# 🤖 T.I.A.O — Tecnologia de Interação para Atendimento e Organização
+> **Status do Projeto**: Protótipo Funcional (Feira Acadêmica)
 
-## 2. Dinâmica Principal – Simulação de Atendimento 
-Objetivo: Demonstrar como o TIAO facilita o processo inicial de atendimento, organizando as informações do paciente antes do contato com o profissional de saúde. 
-Funcionamento: 
-- 1	O visitante chega ao stand 
-- 2	É convidado a participar da simulação 
-- 3	Utiliza um notebook ou tablet 
-- 4	Preenche uma ficha digital com informações como nome, idade, sintomas e temperatura simulada
+> **Tema**: Saúde Digital e Robótica Educacional
 
-Após o preenchimento, o sistema organiza automaticamente os dados, gera uma ficha estruturada e contribui para um atendimento mais ágil e eficiente. 
+> **Uso**: Estritamente pedagógico e de apoio.
 
-# 3. Dinâmica Secundária – Desafio Interativo 
-Nome: Você organizaria esse atendimento?
-
--- 1	O visitante recebe um cenário com múltiplos pacientes 
--- 2	Deve decidir como organizar o atendimento
-     
--- 3	O sistema apresenta a solução baseada na lógica do TIAO 
-A atividade reforça a importância da organização no atendimento inicial.
-
--- 4. Brinde 
-Será entregue aos visitantes um brinde simbólico composto por balas do tipo Tic Tac, representando uma dose de organização e cuidado. A proposta é criar uma associação leve com o contexto da saúde, tornando a experiência mais memorável.
-
--- 5. Complemento Digital 
-Ao final da experiência, o visitante poderá acessar um QR Code que direciona para conteúdos complementares, incluindo explicação do projeto, demonstração do sistema e informações sobre a importância da organização no atendimento em saúde. 
-
-## 6. Diferencial do Projeto 
-- 1	Atuação no pré-atendimento, reduzindo desorganização
-
-- 2	Apoio à equipe sem substituição de profissionais
-
-- 3	Melhoria do fluxo de pacientes
-
-- 4	Solução simples e aplicável
-
-## 7. Conclusão 
-O projeto TIAO demonstra como a tecnologia pode contribuir para um atendimento mais organizado e eficiente na área da saúde. Ao automatizar a etapa inicial de coleta de dados, o sistema facilita o trabalho dos profissionais e melhora a experiência do paciente, promovendo mais qualidade no acesso ao atendimento. 
-
+## 1. Introdução
+O T.I.A.O é um projeto desenvolvido por estudantes do 1º semestre de Ciência da Computação na disciplina de **Engenharia de Prompt e Aplicações em IA**. O sistema combina a robustez física do **Arduino** com a capacidade analítica do **Python** para criar uma experiência de pré-atendimento hospitalar simulada, focada na organização e no acolhimento humano.
+## 2. O Problema
+Identificamos que a chegada a uma unidade de saúde é frequentemente marcada por confusão e ansiedade. A falta de uma triagem inicial rápida impede que o fluxo de pacientes seja organizado de forma eficiente, sobrecarregando profissionais e gerando desconforto nos usuários.
+## 3. A Proposta T.I.A.O
+O T.I.A.O atua como um assistente de triagem que:
+ * **Acolhe**: Inicia a interação de forma amigável e visual.
+ * **Organiza**: Coleta sinais vitais (temperatura) e sintomas básicos.
+ * **Informa**: Gera uma ficha anônima e categoriza o atendimento por cores acadêmicas.
+ * **Educa**: Demonstra os limites e benefícios da tecnologia na saúde.
+## 4. Funcionamento Técnico
+O robô funciona através de uma arquitetura híbrida:
+ 1. **Detecção**: Um sensor ultrassônico identifica a aproximação do visitante.
+ 2. **Medição**: O sensor de temperatura infravermelho realiza a leitura sem contato.
+ 3. **Processamento (Arduino)**: O Arduino Mega funciona como o "cérebro físico", enviando os dados brutos via Serial para o PC.
+ 4. **Interpretação (Python)**: O Python processa o JSON recebido, integra os sintomas e define a classificação.
+ 5. **Feedback**: O sistema exibe o resultado na tela e acende o **LED RGB** no robô na cor correspondente (Verde, Amarelo ou Vermelho).
+## 5. Dinâmicas do Stand (2 Minutos cada)
+### 🟢 Dinâmica 1: Atendimento Real
+O visitante interage com o robô. O T.I.A.O detecta sua presença, mede sua temperatura e gera uma **Ficha Anônima** em tempo real. É a prova de conceito do hardware funcionando com o software.
+### 🟡 Dinâmica 2: Você organizaria esse atendimento?
+O visitante recebe cards de 4 pacientes fictícios com sintomas diferentes. Ele deve decidir a ordem de prioridade. Ao final, comparamos com a lógica de triagem do T.I.A.O, discutindo a importância da organização automatizada.
+### 🔴 Dinâmica 3: Verdadeiro ou Falso
+Um quiz rápido focado na ética e tecnologia:
+ * *"O T.I.A.O substitui um médico?"* (**Falso**)
+ * *"O sistema deve coletar CPF?"* (**Falso**)
+## 6. Classificação Acadêmica de Temperatura
+Utilizamos uma régua simbólica para fins educacionais:
+ * **Hipotermia**: < 35 °C (Vermelho)
+ * **Normotermia**: 36 °C – 37,2 °C (Verde)
+ * **Febrícula/Febre**: 37,3 °C – 38,9 °C (Amarelo)
+ * **Hipertermia**: > 39 °C (Vermelho)
+## 7. Estrutura do Stand
+ * **Cores**: Amarelo (Acolhimento), Preto (Tecnologia), Branco (Saúde).
+ * **Elementos**: Mesa com painel explicativo, robô físico decorado, notebook rodando Python e área de brindes.
+ * **Acessibilidade**: QR Code para acesso ao folder digital e ficha técnica.
+## 8. Organização da Equipe (16 Integrantes)
+| Subequipe | Função Principal |
+|---|---|
+| **Recepção/Fluxo** | Gestão de filas e boas-vindas. |
+| **Técnica** | Supervisão do Arduino, sensores e código Python. |
+| **Dinâmicas** | Condução dos desafios e quiz com visitantes. |
+| **Avaliadores** | Apresentação formal e entrega dos kits especiais. |
+| **Apoio/Brindes** | Logística de reposição e organização do espaço. |
+## 9. Brindes
+ * **Visitantes**: Tic Tac personalizado ou seringa decorativa ("Dose de Cuidado").
+ * **Avaliadores**: Sacola exclusiva com folder técnico, QR Code, cartão de agradecimento e mimos personalizados.
+## 10. Cuidados Éticos e LGPD
+ 1. **Anonimato**: Nenhuma informação identificável (Nome, CPF, Rosto) é coletada.
+ 2. **Segurança**: O sistema opera **Offline**, sem tráfego de dados sensíveis na rede.
+>
+>
