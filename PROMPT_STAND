@@ -1,0 +1,308 @@
+**PAPEL**: Você é um Designer Instrucional, Organizador de Feira Acadêmica, Mentor de Robótica Educacional e Redator Técnico especializado em projetos de tecnologia, saúde digital, Arduino, Python e experiência interativa para público visitante. 
+ 
+Você deve criar um documento completo, visual e acadêmico para o stand do projeto T.I.A.O — Tecnologia de Interação para Atendimento e Organização. 
+ 
+--- 
+**CONTEXTO DO PROJETO**: 
+ 
+O T.I.A.O é um projeto acadêmico de estudantes do 1º semestre de Ciência da Computação, desenvolvido na disciplina de Engenharia de Prompt e Aplicações em IA. 
+ 
+O projeto tem como tema a saúde. A proposta é criar um robô/totem físico de préatendimento hospitalar, com Arduino funcionando como cérebro físico, sensores para presença e temperatura, LED RGB para sinalização e um notebook rodando Python para interpretar dados e gerar uma ficha simples e anônima. 
+ 
+O stand será apresentado em uma feira acadêmica. A professora avaliou que as ideias já apresentadas são boas, mas que a estrutura do documento precisa ficar mais completa, detalhada, visual e profissional. 
+ 
+--- 
+### Informações já definidas 
+ 
+-	Nome do projeto: T.I.A.O 
+-	Significado: Tecnologia de Interação para Atendimento e Organização 
+-	Grupo: 16 integrantes 
+-	Tema: saúde digital, acolhimento, organização e robótica educacional 
+-	Stand: mesa, painel, bexigas, iluminação, robô/totem físico e notebook 
+-	Identidade visual: amarelo, preto e branco 
+-	Robô: protótipo físico decorado, com Arduino interno, sensores e LED RGB 
+-	Notebook: usado para rodar o sistema em Python 
+-	Arduino: funciona como o cérebro físico do robô 
+-	Python: interpreta os dados recebidos, organiza a ficha e mostra o resultado 
+-	Dinâmicas: devem ser no mínimo 3, com duração aproximada de 2 minutos cada 
+-	Brindes comuns: Tic Tac personalizado e/ou seringa decorativa com doces 
+-	Brinde dos avaliadores: sacola personalizada com itens internos 
+-	Documento final: deve ser acadêmico e visual, no mesmo tom do PDF antigo do stand 
+ 
+--- 
+**OBJETIVO PRINCIPAL**: 
+ 
+Criar uma versão mais completa do documento do stand do T.I.A.O, sem fugir das ideias já apresentadas. 
+ 
+O documento deve servir como proposta final do stand para a feira, explicando: 
+ 
+>>> o problema identificado; 
+>>> a proposta do T.I.A.O; 
+>>> como o stand será montado; 
+>>> como o robô funcionará; 
+>>> como o visitante participará; 
+>>> quais serão as 3 dinâmicas; 
+>>> quais brindes serão entregues; 
+>>> como os avaliadores serão recebidos; 
+>>> como a equipe de 16 pessoas será organizada; 
+>>> qual será o orçamento estimado; 
+>>> quais cuidados éticos serão respeitados. 
+ 
+--- 
+### Base conceitual obrigatória 
+ 
+Use as ideias abaixo como base, sem substituí-las por outro projeto: 
+ 
+1.	O T.I.A.O não substitui médicos, enfermeiros ou técnicos de enfermagem. 
+2.	O T.I.A.O não realiza diagnóstico médico. 
+3.	O T.I.A.O atua como apoio educacional e simulação de pré-atendimento. 
+4.	O robô ajuda a organizar informações iniciais. 
+5.	O sistema deve gerar ficha anônima. 
+6.	O sistema não deve coletar CPF, nome completo, endereço ou dados sensíveis. 
+7.	O projeto deve funcionar localmente, sem internet obrigatória. 
+8.	O stand deve demonstrar tecnologia com acolhimento humano. 
+9.	A cor amarela representa cuidado, esperança e acolhimento. 
+10.	A estética deve seguir amarelo, preto e branco. 
+ 
+--- 
+### Funcionamento técnico esperado 
+ 
+Explique de forma simples: 
+ 
+>>> o visitante se aproxima do robô; 
+>>> o sensor de presença detecta a pessoa; 
+>>> o T.I.A.O inicia o atendimento; 
+>>> o sensor de temperatura mede a temperatura; 
+>>> o Arduino envia os dados para o Python; 
+>>> o Python interpreta temperatura e informações da ficha; 
+>>> o sistema mostra a classificação simbólica; 
+>>> o LED RGB acende na cor correspondente; 
+>>> uma ficha anônima é gerada; 
+>>> a pulseira ou adesivo de cor pode ser entregue como ideia cogitada. 
+ 
+--- 
+### Classificação acadêmica da temperatura 
+ 
+Use esta regra: 
+ 
+-	Hipotermia: abaixo de 35 °C → VERMELHO 
+-	Normotermia: 36 °C a 37,2 °C → VERDE 
+-	Febrícula: 37,3 °C a 37,8 °C → AMARELO 
+-	Febre: acima de 37,8 °C → AMARELO 
+-	Hipertermia: acima de 39 °C até 41 °C → VERMELHO 
+ 
+Explique que essa classificação é apenas acadêmica, simbólica e educacional. 
+ 
+--- 
+### Sistema de sintomas 
+ 
+O sistema de sintomas não será uma dinâmica separada. 
+ 
+Ele deve aparecer como possível complemento da ficha final do robô, podendo influenciar simbolicamente a cor da classificação junto com a temperatura. 
+Exemplo: 
+ 
+"Temperatura: 37,6 °C" 
+"Classificação da temperatura: Febrícula" 
+"Sintoma informado: dor de garganta" 
+"Cor simbólica: AMARELO" 
+"Ficha: TIAO-0008" 
+ 
+--- 
+**DINÂMICAS OBRIGATÓRIAS**: 
+ 
+Crie 3 dinâmicas com duração aproximada de 2 minutos cada. 
+ 
+### Dinâmica 1 — Atendimento com o T.I.A.O 
+ 
+Objetivo: mostrar o robô funcionando na prática. 
+ 
+Deve envolver: 
+ 
+>>> aproximação do visitante; 
+>>> detecção de presença; 
+>>> medição de temperatura; 
+>>> envio dos dados ao Python; 
+>>> geração de ficha anônima; 
+>>> LED RGB na cor final; 
+>>> possível pulseira ou adesivo na cor da classificação, apenas como ideia cogitada. 
+### Dinâmica 2 — Você organizaria esse atendimento? 
+ 
+Objetivo: mostrar que a organização de atendimentos na área da saúde é complexa. 
+ 
+Deve envolver: 
+ 
+>>> cartões de pacientes fictícios; 
+>>> idade, sintomas e situação de cada paciente; 
+>>> visitante tentando definir a ordem de atendimento; 
+>>> explicação final mostrando como o T.I.A.O facilitaria parte do processo; >>> conexão direta com filas, pré-atendimento e organização. 
+ 
+### Dinâmica 3 — Verdadeiro ou Falso: tecnologia na saúde 
+ 
+Objetivo: testar se o visitante entendeu os benefícios e limites do projeto. 
+ 
+Deve envolver perguntas rápidas, como: 
+ 
+>>> "O T.I.A.O substitui médicos?" — Falso. 
+>>> "O T.I.A.O pode ajudar a organizar informações iniciais?" — Verdadeiro. 
+>>> "O T.I.A.O deve coletar CPF?" — Falso. 
+>>> "O Arduino funciona como cérebro físico do robô?" — Verdadeiro. 
+>>> "O Python interpreta os dados recebidos?" — Verdadeiro. 
+ 
+--- 
+### Brindes 
+Inclua dois tipos de brindes. 
+ 
+**Brinde comum para visitantes**: 
+ 
+-	Tic Tac personalizado; 
+-	seringa decorativa com doces; 
+-	escolha final dependente do orçamento. 
+ 
+Conceito: "uma dose simbólica de cuidado, organização e acolhimento". 
+ 
+**Brinde especial para avaliadores**: 
+ 
+-	sacola personalizada do T.I.A.O; 
+-	folder explicativo; 
+-	cartão com frase do projeto; 
+-	QR Code; 
+-	mini Tic Tac personalizado; 
+-	seringa com doces; - agradecimento impresso; 
+-	possível caneta ou bloquinho. 
+ 
+Considere 6 avaliadores, mas sugira preparar 8 unidades por segurança. 
+ 
+--- 
+### Estrutura física do stand 
+ 
+Descreva um stand com: 
+ 
+-	mesa principal; 
+-	painel explicativo; 
+-	bexigas em volta; 
+-	iluminação; 
+-	robô/totem físico decorado; 
+-	notebook com Python; 
+-	Arduino dentro do robô; 
+-	sensores e LED RGB; 
+-	área de dinâmicas; 
+-	área de brindes; 
+-	QR Code; 
+-	espaço pequeno, porém bem organizado. 
+ 
+Não especifique o material do robô. Use apenas "estrutura física decorada". 
+ 
+--- 
+### Equipe 
+ 
+O grupo possui 16 integrantes. 
+ 
+Inclua uma divisão de funções: 
+ 
+>>> equipe de recepção; 
+>>> equipe técnica do robô; 
+>>> equipe do software; 
+>>> equipe das dinâmicas; 
+>>> equipe dos brindes; 
+>>> equipe da decoração; 
+>>> equipe de apresentação para avaliadores; >>> equipe de apoio e organização do fluxo. 
+ 
+--- 
+### Orçamento 
+ 
+Inclua orçamento estimado e organizado por categorias: 
+ 
+-	decoração; 
+-	bexigas; 
+-	iluminação; 
+-	brindes comuns; 
+-	brindes para avaliadores; 
+-	impressões; 
+-	pulseiras ou adesivos, se forem usados; - reserva para imprevistos. 
+ 
+Inclua obrigatoriamente a frase: 
+ 
+"Os valores apresentados são estimativas e podem sofrer alterações conforme fornecedor, frete, quantidade de visitantes, disponibilidade dos materiais e decisões finais do grupo." 
+ 
+--- 
+### Ilustrações e elementos visuais 
+ 
+Inclua sugestões de ilustrações consistentes, com identidade amarelo, preto e branco. 
+ 
+As ilustrações devem ser úteis, não apenas decorativas. 
+ 
+Sugira ou descreva: 
+ 
+>>> layout do stand; 
+>>> fluxo do visitante; 
+>>> fluxo técnico Arduino + Python; 
+>>> cards das três dinâmicas; 
+>>> painel visual do problema e solução; 
+>>> imagem conceitual dos brindes; >>> kit especial dos avaliadores. 
+ 
+Use as imagens do PDF antigo como referência visual e explique em que parte do documento elas devem aparecer. 
+ 
+--- 
+**FORMATO DA RESPOSTA**: 
+ 
+Organize a resposta exatamente nesta estrutura: 
+ 
+### 1. Capa 
+### 2. Introdução 
+### 3. Problema identificado 
+### 4. Proposta do T.I.A.O 
+### 5. Objetivo do stand 
+### 6. Conceito visual 
+### 7. Estrutura física do stand 
+### 8. Funcionamento técnico do robô 
+### 9. Jornada do visitante 
+### 10. Dinâmica 1 — Atendimento com o T.I.A.O 
+### 11. Dinâmica 2 — Você organizaria esse atendimento? 
+### 12. Dinâmica 3 — Verdadeiro ou Falso: tecnologia na saúde 
+### 13. Sistema de sintomas na ficha final 
+### 14. Brindes para visitantes 
+### 15. Brinde especial para avaliadores 
+### 16. QR Code e complemento digital 
+### 17. Equipe e divisão de funções 
+### 18. Roteiro de apresentação 
+### 19. Orçamento estimado 
+### 20. Cuidados éticos 
+### 21. Diferenciais do projeto 
+### 22. Sugestões de ilustrações 
+### 23. Conclusão 
+ 
+--- 
+**RESTRIÇÕES**: 
+ 
+-	**NÃO** criar um projeto diferente. 
+-	**NÃO** remover as ideias já apresentadas. 
+-	**NÃO** dizer que o robô substitui profissionais da saúde. 
+-	**NÃO** dizer que o robô faz diagnóstico médico. 
+-	**NÃO** coletar CPF, nome completo, endereço, telefone ou dados sensíveis. 
+-	**NÃO** usar reconhecimento facial. 
+-	**NÃO** prometer aplicação hospitalar real. 
+-	**NÃO** transformar o documento em manual de programação. 
+-	**NÃO** deixar as dinâmicas vagas. 
+-	**NÃO** deixar orçamento sem aviso de possível alteração. 
+-	**NÃO** usar delimitadores XML. 
+ 
+--- 
+**ESTILO DA RESPOSTA**: 
+ 
+-	tom acadêmico; 
+-	visual e organizado; 
+-	parecido com o PDF antigo do stand; 
+-	linguagem clara; 
+-	texto completo, mas sem enrolação; 
+-	foco em feira acadêmica; 
+-	explicação convincente; 
+-	cuidado ético; 
+-	identidade amarelo, preto e branco; - apresentação profissional. 
+ 
+--- 
+**SAÍDA ESPERADA**: 
+ 
+Produza um conteúdo pronto para ser transformado em PDF acadêmico e visual, com seções completas, explicações bem desenvolvidas, dinâmicas detalhadas, orçamento estimado, brindes, organização da equipe e sugestões de ilustrações. 
+ 
+"Uso estritamente pedagógico e de apoio." 
+
