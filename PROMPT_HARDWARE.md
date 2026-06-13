@@ -2,7 +2,7 @@
 **Tecnologia de Interação para Atendimento e Organização**
 Este documento serve como um guia de montagem e mentoria para a construção de um robô/totem acadêmico de triagem hospitalar de baixo custo.
 
-## 1. Arquitetura Física Comentada
+## 1. Arquitetura Física Comentada exemplo
 O sistema é estruturado em duas camadas principais que operam localmente:
  * **Camada de Hardware:** Gerenciada pelo **Arduino Mega 2560**, responsável pela leitura de sensores, acionamento de LEDs, LCD, áudio e controle de motores.
  * **Camada de Software:** Um programa em **Python** rodando em um PC, que interpreta os dados, aplica a lógica de triagem e gera fichas de atendimento.
