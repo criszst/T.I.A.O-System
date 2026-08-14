@@ -1,0 +1,1230 @@
+# ============================================================
+# T.I.A.O. — Sistema Python definitivo corrigido
+# Tkinter + sintomas + voz + Serial + CSV + histórico
+# Uso estritamente pedagógico e de apoio.
+# Não realiza diagnóstico médico.
+# ============================================================
+
+import tkinter as tk
+from tkinter import ttk, messagebox
+import serial
+import threading
+import queue
+import time
+import csv
+import os
+import random
+from datetime import datetime
+import pyttsx3
+
+# ============================================================
+# CONFIGURAÇÕES PRINCIPAIS
+# ============================================================
+
+PORTA_COM = "COM4"          # Troque para COM3, COM5 etc.
+BAUD_RATE = 9600
+ARQUIVO_CSV = "fichas_tiao.csv"
+ARQUIVO_FICHAS_TXT = "fichas_espera_tiao.txt"
+
+# Coloque True para testar sem Arduino.
+# Coloque False para usar com o Arduino real.
+MODO_SIMULADO = False
+
+TEMPO_CONFIRMACAO_PRESENCA_SEGUNDOS = 5
+
+CORES_TIAO = {
+    "fundo": "#F2F8F5",
+    "branco": "#FFFFFF",
+    "azul": "#0B5FA5",
+    "azul_escuro": "#073B66",
+    "verde": "#2EAD63",
+    "verde_escuro": "#1F7A45",
+    "amarelo": "#F2C94C",
+    "vermelho": "#D94343",
+    "grafite": "#263238",
+    "cinza": "#607D8B",
+}
+
+CORES_RISCO = {
+    "VERDE": CORES_TIAO["verde"],
+    "AMARELO": "#B88700",
+    "VERMELHO": CORES_TIAO["vermelho"],
+    "IGNORAR": CORES_TIAO["cinza"],
+}
+
+SIGNIFICADO_CORES_TIAO = (
+    "Cores do T.I.A.O.: azul = tecnologia e acolhimento | "
+    "verde = estabilidade | amarelo = atenção | vermelho = prioridade | "
+    "uso pedagógico: não substitui atendimento médico."
+)
+
+MENSAGENS_FILA = [
+    "Seu número na fila é {numero}. O T.I.A.O. te deseja uma boa recuperação.",
+    "Seu número de espera é {numero}. O T.I.A.O. espera que você se recupere bem.",
+    "Atendimento registrado: seu número na fila é {numero}. O T.I.A.O. deseja cuidado e boa recuperação.",
+    "Sua ficha foi gerada com o número {numero}. O T.I.A.O. agradece a confiança e deseja uma ótima recuperação.",
+]
+
+# ============================================================
+# SINTOMAS
+# ============================================================
+
+SINTOMAS_CRITICOS = [
+    "Falta de ar intensa",
+    "Dor no peito",
+    "Desmaio ou perda de consciência",
+    "Confusão mental",
+    "Lábios ou rosto arroxeados",
+]
+
+SINTOMAS_MODERADOS = [
+    "Febre",
+    "Tontura",
+    "Vômito persistente",
+    "Dor forte",
+    "Fraqueza intensa",
+    "Falta de ar leve",
+]
+
+SINTOMAS_LEVES = [
+    "Tosse leve",
+    "Dor de cabeça leve",
+    "Coriza",
+    "Dor de garganta",
+    "Náusea leve",
+    "Cansaço leve",
+]
+
+# ============================================================
+# FRASES DE VOZ
+# ============================================================
+
+FRASES = {
+    "MENU": "Bem-vindo ao TIAO. Selecione seus sintomas na tela para iniciar a pré-triagem.",
+    "SINTOMAS_CONFIRMADOS": "Sintomas registrados. Aproxime-se do TIAO para iniciar a medição.",
+    "AGUARDANDO": "Aguardando paciente. Aproxime-se do sensor frontal do TIAO.",
+    "PRESENCA": "Presença detectada. Permaneça parado por cinco segundos para confirmar o atendimento.",
+    "CONFIRMANDO": "Confirmando presença. Continue parado em frente ao robô por cinco segundos.",
+    "MEDICAO": "Atendimento iniciado. Siga as instruções no display. Mantenha-se parado durante a medição.",
+    "OXIMETRIA": "Coloque o dedo no sensor de oximetria e mantenha o dedo parado.",
+    "MEDINDO": "Medição em andamento. Permaneça parado até a conclusão.",
+    "RESULTADO": "Leitura concluída. Calculando classificação acadêmica.",
+    "VERDE": "Classificação verde. Atendimento sem alerta crítico na simulação.",
+    "AMARELO": "Classificação amarela. Atenção recomendada na simulação.",
+    "VERMELHO": "Classificação vermelha. Prioridade simulada para atendimento humano.",
+    "REINICIANDO": "Atendimento finalizado. Sistema pronto para o próximo paciente.",
+    "ERRO_SERIAL": "Erro de conexão com o Arduino. Verifique o cabo USB e a porta COM.",
+    "ERRO_DADOS": "Não foi possível interpretar os dados recebidos. Encaminhe para atendimento manual.",
+}
+
+INTERVALOS_VOZ = {
+    "menu": 12,
+    "confirmacao_sintomas": 10,
+    "aguardando_robo": 10,
+    "confirmando_presenca": 5,
+    "medindo": 5,
+    "aguardando_resultado": 5,
+}
+
+# ============================================================
+# VOZ EM THREAD
+# ============================================================
+
+fila_voz = queue.Queue()
+
+
+def worker_voz():
+    engine = pyttsx3.init()
+    engine.setProperty("rate", 145)
+    engine.setProperty("volume", 1.0)
+
+    try:
+        vozes = engine.getProperty("voices")
+        for voz in vozes:
+            nome = voz.name.lower()
+            if "portuguese" in nome or "brazil" in nome:
+                engine.setProperty("voice", voz.id)
+                break
+    except Exception:
+        pass
+
+    while True:
+        texto = fila_voz.get()
+
+        if texto is None:
+            break
+
+        try:
+            print("[VOZ]", texto)
+            engine.say(texto)
+            engine.runAndWait()
+        except Exception as erro:
+            print("[ERRO VOZ]", erro)
+
+
+threading.Thread(target=worker_voz, daemon=True).start()
+
+
+def falar(texto):
+    fila_voz.put(texto)
+
+
+# ============================================================
+# FUNÇÕES DE CONVERSÃO CORRIGIDAS
+# ============================================================
+
+def converter_float(valor):
+    """
+    Converte TEMP para float.
+    Se vier N/A, -1, vazio ou inválido, retorna None.
+    """
+    if valor is None:
+        return None
+
+    valor = str(valor).strip()
+
+    if valor.upper() == "N/A":
+        return None
+
+    try:
+        numero = float(valor)
+
+        if numero < 0:
+            return None
+
+        return numero
+
+    except Exception:
+        return None
+
+
+def converter_int(valor):
+    """
+    Converte BPM, SpO2 e PRESENCA para int.
+    Se vier N/A, -1, vazio ou inválido, retorna None.
+    """
+    if valor is None:
+        return None
+
+    valor = str(valor).strip()
+
+    if valor.upper() == "N/A":
+        return None
+
+    try:
+        numero = int(float(valor))
+
+        if numero < 0:
+            return None
+
+        return numero
+
+    except Exception:
+        return None
+
+
+def formatar_valor(valor, sufixo=""):
+    """
+    Mostra valores indisponíveis de forma bonita.
+    """
+    if valor is None:
+        return "indisponível"
+
+    return f"{valor}{sufixo}"
+
+
+def formatar_float(valor, sufixo=""):
+    if valor is None:
+        return "indisponível"
+
+    return f"{valor:.1f}{sufixo}"
+
+
+# ============================================================
+# FUNÇÕES DE CLASSIFICAÇÃO
+# ============================================================
+
+def classificar_sintomas(sintomas):
+    if any(s in SINTOMAS_CRITICOS for s in sintomas):
+        return "VERMELHO"
+
+    if any(s in SINTOMAS_MODERADOS for s in sintomas):
+        return "AMARELO"
+
+    return "VERDE"
+
+
+def classificar_temperatura(temp):
+    if temp is None:
+        return "IGNORAR"
+
+    if temp < 35.0:
+        return "IGNORAR"
+    elif temp <= 37.4:
+        return "VERDE"
+    elif temp <= 38.5:
+        return "AMARELO"
+    else:
+        return "VERMELHO"
+
+
+def classificar_bpm(bpm):
+    if bpm is None:
+        return "IGNORAR"
+
+    if bpm < 40:
+        return "VERMELHO"
+    elif bpm < 50:
+        return "AMARELO"
+    elif bpm <= 100:
+        return "VERDE"
+    elif bpm <= 120:
+        return "AMARELO"
+    else:
+        return "VERMELHO"
+
+
+def classificar_spo2(spo2):
+    if spo2 is None:
+        return "IGNORAR"
+
+    if spo2 >= 95:
+        return "VERDE"
+    elif spo2 >= 92:
+        return "AMARELO"
+    else:
+        return "VERMELHO"
+
+
+def combinar_riscos(riscos):
+    riscos_validos = [r for r in riscos if r != "IGNORAR"]
+
+    if not riscos_validos:
+        return "IGNORAR"
+
+    if "VERMELHO" in riscos_validos:
+        return "VERMELHO"
+
+    if "AMARELO" in riscos_validos:
+        return "AMARELO"
+
+    return "VERDE"
+
+
+def mensagem_resultado(risco, sintomas, temp, bpm, spo2):
+    partes = []
+
+    if risco == "VERDE":
+        partes.append(FRASES["VERDE"])
+    elif risco == "AMARELO":
+        partes.append(FRASES["AMARELO"])
+    elif risco == "VERMELHO":
+        partes.append(FRASES["VERMELHO"])
+    else:
+        partes.append("Não foi possível classificar o atendimento.")
+
+    if sintomas:
+        partes.append("Sintomas informados: " + ", ".join(sintomas) + ".")
+
+    if temp is not None:
+        partes.append(f"Temperatura registrada de {temp:.1f} graus.")
+    else:
+        partes.append("Temperatura indisponível.")
+
+    if bpm is not None:
+        partes.append(f"Batimentos registrados de {bpm} batimentos por minuto.")
+    else:
+        partes.append("Batimentos indisponíveis.")
+
+    if spo2 is not None:
+        partes.append(f"Oxigenação estimada de {spo2} por cento.")
+    else:
+        partes.append("Oxigenação indisponível.")
+
+    partes.append("Este resultado é apenas uma simulação acadêmica, não é diagnóstico médico.")
+
+    return " ".join(partes)
+
+
+# ============================================================
+# CSV
+# ============================================================
+
+def preparar_csv():
+    if not os.path.exists(ARQUIVO_CSV):
+        with open(ARQUIVO_CSV, "w", newline="", encoding="utf-8") as arquivo:
+            writer = csv.writer(arquivo, delimiter=";")
+            writer.writerow([
+                "numero_atendimento",
+                "data_hora",
+                "sintomas_selecionados",
+                "risco_sintomas",
+                "temperatura",
+                "bpm",
+                "spo2",
+                "risco_sensores",
+                "risco_final",
+                "observacao"
+            ])
+
+
+def salvar_ficha(numero, sintomas, risco_sintomas, temp, bpm, spo2, risco_sensores, risco_final):
+    preparar_csv()
+
+    data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+    with open(ARQUIVO_CSV, "a", newline="", encoding="utf-8") as arquivo:
+        writer = csv.writer(arquivo, delimiter=";")
+        writer.writerow([
+            numero,
+            data_hora,
+            ", ".join(sintomas) if sintomas else "Nenhum",
+            risco_sintomas,
+            f"{temp:.2f}" if temp is not None else "indisponível",
+            bpm if bpm is not None else "indisponível",
+            spo2 if spo2 is not None else "indisponível",
+            risco_sensores if risco_sensores != "IGNORAR" else "indisponível",
+            risco_final,
+            "Protótipo acadêmico. Não representa diagnóstico médico."
+        ])
+
+    salvar_ficha_txt(
+        numero,
+        data_hora,
+        sintomas,
+        risco_sintomas,
+        temp,
+        bpm,
+        spo2,
+        risco_sensores,
+        risco_final
+    )
+
+
+def salvar_ficha_txt(numero, data_hora, sintomas, risco_sintomas, temp, bpm, spo2, risco_sensores, risco_final):
+    texto_sintomas = ", ".join(sintomas) if sintomas else "Nenhum"
+    texto_risco_sensores = risco_sensores if risco_sensores != "IGNORAR" else "indisponível"
+
+    linhas = [
+        "=" * 48,
+        f"FICHA DE ESPERA - T.I.A.O.",
+        f"Número de espera: {numero}",
+        f"Data e hora: {data_hora}",
+        "",
+        "Dados do paciente/atendimento:",
+        f"Sintomas selecionados: {texto_sintomas}",
+        f"Risco pelos sintomas: {risco_sintomas}",
+        f"Temperatura: {formatar_float(temp, ' °C')}",
+        f"BPM: {formatar_valor(bpm)}",
+        f"SpO2: {formatar_valor(spo2, '%')}",
+        f"Risco dos sensores: {texto_risco_sensores}",
+        f"Classificação final: {risco_final}",
+        "",
+        "Observação: protótipo acadêmico. Não representa diagnóstico médico.",
+        "=" * 48,
+        "",
+    ]
+
+    with open(ARQUIVO_FICHAS_TXT, "a", encoding="utf-8") as arquivo:
+        arquivo.write("\n".join(linhas))
+
+
+# ============================================================
+# SERIAL
+# ============================================================
+
+def interpretar_linha(linha):
+    dados = {}
+
+    for parte in linha.strip().split(";"):
+        if ":" in parte:
+            chave, valor = parte.split(":", 1)
+            dados[chave.strip()] = valor.strip()
+
+    return dados
+
+
+# ============================================================
+# APLICAÇÃO TKINTER
+# ============================================================
+
+class TiaoApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("T.I.A.O — Pré-triagem")
+        self.root.geometry("900x720")
+        self.root.minsize(840, 680)
+        self.root.configure(bg=CORES_TIAO["fundo"])
+
+        self.fila_ui = queue.Queue()
+        self.serial = None
+        self.serial_lock = threading.Lock()
+
+        self.estado = "menu"
+        self.ultimo_aviso_estado = {}
+
+        self.sintoma_vars = {}
+        self.sintomas_selecionados = []
+        self.numero_atendimento = self.proximo_numero_atendimento()
+
+        self.atendimento_ativo = False
+        self.status_texto = tk.StringVar(value="Sistema iniciado.")
+
+        self.conectar_serial()
+        self.tela_menu()
+
+        self.root.after(200, self.processar_fila_ui)
+        self.root.after(1000, self.repetir_voz_por_estado)
+
+    # ========================================================
+    # SERIAL
+    # ========================================================
+
+    def conectar_serial(self):
+        if MODO_SIMULADO:
+            print("[INFO] Modo simulado ativo. Arduino não será conectado.")
+            return
+
+        try:
+            self.serial = serial.Serial(PORTA_COM, BAUD_RATE, timeout=1)
+            time.sleep(2)
+            print(f"[OK] Conectado ao Arduino na porta {PORTA_COM}")
+
+            thread = threading.Thread(target=self.loop_serial, daemon=True)
+            thread.start()
+
+        except serial.SerialException as erro:
+            print("[ERRO SERIAL]", erro)
+            falar(FRASES["ERRO_SERIAL"])
+            messagebox.showwarning(
+                "Serial",
+                f"Não foi possível conectar ao Arduino em {PORTA_COM}.\n\n"
+                "Verifique a porta COM ou use MODO_SIMULADO = True."
+            )
+
+    def loop_serial(self):
+        while True:
+            try:
+                linha = self.serial.readline().decode("utf-8", errors="ignore").strip()
+
+                if linha:
+                    self.fila_ui.put(("serial", linha))
+
+            except Exception as erro:
+                self.fila_ui.put(("erro_serial", str(erro)))
+                break
+
+    def enviar_para_arduino(self, texto):
+        if MODO_SIMULADO:
+            print("[SIMULADO PYTHON → ARDUINO]", texto.strip())
+            return
+
+        if self.serial is None:
+            return
+
+        try:
+            with self.serial_lock:
+                self.serial.write(texto.encode("utf-8"))
+                print("[PYTHON → ARDUINO]", texto.strip())
+        except Exception as erro:
+            print("[ERRO ENVIO SERIAL]", erro)
+
+    # ========================================================
+    # TELAS
+    # ========================================================
+
+    def limpar_tela(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        self.root.configure(bg=CORES_TIAO["fundo"])
+
+    def mudar_estado(self, novo_estado, fala_inicial=None):
+        self.estado = novo_estado
+        self.ultimo_aviso_estado[novo_estado] = time.time()
+
+        if fala_inicial:
+            falar(fala_inicial)
+
+    def criar_frame(self, parent=None, bg=None, **kwargs):
+        return tk.Frame(parent or self.root, bg=bg or CORES_TIAO["fundo"], **kwargs)
+
+    def criar_label(self, parent, fg=None, bg=None, **kwargs):
+        kwargs.setdefault("fg", fg or CORES_TIAO["grafite"])
+        kwargs.setdefault("bg", bg or CORES_TIAO["fundo"])
+        return tk.Label(parent, **kwargs)
+
+    def criar_botao(self, parent, text, command, cor=None, **kwargs):
+        cor_fundo = cor or CORES_TIAO["azul"]
+        kwargs.setdefault("font", ("Arial", 13, "bold"))
+        kwargs.setdefault("fg", CORES_TIAO["branco"])
+        kwargs.setdefault("bg", cor_fundo)
+        kwargs.setdefault("activeforeground", CORES_TIAO["branco"])
+        kwargs.setdefault("activebackground", cor_fundo)
+        kwargs.setdefault("relief", "flat")
+        kwargs.setdefault("bd", 0)
+        kwargs.setdefault("padx", 10)
+        kwargs.setdefault("pady", 7)
+        kwargs.setdefault("cursor", "hand2")
+        return tk.Button(parent, text=text, command=command, **kwargs)
+
+    def criar_label_frame(self, parent, text, cor_titulo, **kwargs):
+        kwargs.setdefault("bg", CORES_TIAO["branco"])
+        kwargs.setdefault("fg", cor_titulo)
+        kwargs.setdefault("font", ("Arial", 12, "bold"))
+        kwargs.setdefault("bd", 1)
+        kwargs.setdefault("relief", "solid")
+        return tk.LabelFrame(parent, text=text, **kwargs)
+
+    def mostrar_rodape_cores(self):
+        rodape = tk.Frame(self.root, bg=CORES_TIAO["azul_escuro"], padx=12, pady=7)
+        rodape.pack(side="bottom", fill="x")
+
+        tk.Label(
+            rodape,
+            text=SIGNIFICADO_CORES_TIAO,
+            font=("Arial", 9),
+            fg=CORES_TIAO["branco"],
+            bg=CORES_TIAO["azul_escuro"],
+            wraplength=850,
+            justify="center"
+        ).pack()
+
+    def mensagem_final_fila(self, numero):
+        return random.choice(MENSAGENS_FILA).format(numero=numero)
+
+    def tela_menu(self):
+        self.atendimento_ativo = False
+        self.sintomas_selecionados = []
+        self.status_texto.set("Sistema aguardando seleção de sintomas.")
+        self.mudar_estado("menu", FRASES["MENU"])
+
+        self.limpar_tela()
+
+        self.criar_label(
+            self.root,
+            text="T.I.A.O — Pré-triagem",
+            font=("Arial", 24, "bold"),
+            fg=CORES_TIAO["azul"]
+        ).pack(pady=15)
+
+        self.criar_label(
+            self.root,
+            text="Selecione seus sintomas",
+            font=("Arial", 16, "bold"),
+            fg=CORES_TIAO["verde_escuro"]
+        ).pack(pady=5)
+
+        frame = self.criar_frame(self.root)
+        frame.pack(pady=10)
+
+        self.sintoma_vars = {}
+
+        grupos = [
+            ("Sintomas críticos", SINTOMAS_CRITICOS),
+            ("Sintomas moderados", SINTOMAS_MODERADOS),
+            ("Sintomas leves", SINTOMAS_LEVES),
+        ]
+
+        cores_grupos = {
+            "Sintomas críticos": CORES_TIAO["vermelho"],
+            "Sintomas moderados": "#B88700",
+            "Sintomas leves": CORES_TIAO["verde"],
+        }
+
+        for coluna, (nome_grupo, sintomas) in enumerate(grupos):
+            bloco = self.criar_label_frame(
+                frame,
+                text=nome_grupo,
+                cor_titulo=cores_grupos[nome_grupo],
+                padx=10,
+                pady=10
+            )
+            bloco.grid(row=0, column=coluna, padx=10, sticky="n")
+
+            for sintoma in sintomas:
+                var = tk.BooleanVar()
+                self.sintoma_vars[sintoma] = var
+
+                cb = tk.Checkbutton(
+                    bloco,
+                    text=sintoma,
+                    variable=var,
+                    anchor="w",
+                    justify="left",
+                    wraplength=220,
+                    bg=CORES_TIAO["branco"],
+                    fg=CORES_TIAO["grafite"],
+                    activebackground=CORES_TIAO["branco"],
+                    activeforeground=CORES_TIAO["azul"],
+                    selectcolor=CORES_TIAO["fundo"]
+                )
+                cb.pack(anchor="w")
+
+        botoes = self.criar_frame(self.root)
+        botoes.pack(pady=20)
+
+        self.criar_botao(
+            botoes,
+            text="Confirmar sintomas",
+            width=20,
+            cor=CORES_TIAO["verde"],
+            command=self.confirmar_sintomas
+        ).grid(row=0, column=0, padx=10)
+
+        # tk.Button(
+        #     botoes,
+        #     text="Ver histórico",
+        #     font=("Arial", 13),
+        #     width=20,
+        #     command=self.tela_historico
+        # ).grid(row=0, column=1, padx=10)
+
+        self.criar_botao(
+            botoes,
+            text="Sair",
+            width=20,
+            cor=CORES_TIAO["vermelho"],
+            command=self.fechar
+        ).grid(row=0, column=2, padx=10)
+
+        self.mostrar_rodape_cores()
+
+    def confirmar_sintomas(self):
+        self.sintomas_selecionados = [
+            sintoma
+            for sintoma, var in self.sintoma_vars.items()
+            if var.get()
+        ]
+
+        self.tela_confirmacao_sintomas()
+
+    def tela_confirmacao_sintomas(self):
+        self.mudar_estado("confirmacao_sintomas", FRASES["SINTOMAS_CONFIRMADOS"])
+
+        self.limpar_tela()
+
+        self.criar_label(
+            self.root,
+            text="Sintomas selecionados",
+            font=("Arial", 22, "bold"),
+            fg=CORES_TIAO["azul"]
+        ).pack(pady=20)
+
+        if self.sintomas_selecionados:
+            texto = "\n".join(f"• {s}" for s in self.sintomas_selecionados)
+        else:
+            texto = "Nenhum sintoma selecionado."
+
+        self.criar_label(
+            self.root,
+            text=texto,
+            font=("Arial", 14),
+            justify="left",
+            bg=CORES_TIAO["branco"],
+            padx=20,
+            pady=14,
+            wraplength=720
+        ).pack(pady=10)
+
+        self.criar_label(
+            self.root,
+            text="Aproxime-se do T.I.A.O para iniciar a medição.",
+            font=("Arial", 16, "bold"),
+            fg=CORES_TIAO["verde_escuro"]
+        ).pack(pady=25)
+
+        botoes = self.criar_frame(self.root)
+        botoes.pack(pady=20)
+
+        self.criar_botao(
+            botoes,
+            text="Voltar",
+            width=18,
+            cor=CORES_TIAO["cinza"],
+            command=self.tela_menu
+        ).grid(row=0, column=0, padx=10)
+
+        self.criar_botao(
+            botoes,
+            text="Aguardar robô",
+            width=18,
+            cor=CORES_TIAO["azul"],
+            command=self.tela_aguardando_robo
+        ).grid(row=0, column=1, padx=10)
+
+        self.mostrar_rodape_cores()
+
+    def tela_aguardando_robo(self):
+        self.atendimento_ativo = True
+        self.status_texto.set("Aproxime-se do T.I.A.O para iniciar a medição.")
+        self.mudar_estado("aguardando_robo", FRASES["AGUARDANDO"])
+
+        self.limpar_tela()
+
+        self.criar_label(
+            self.root,
+            text="Aguardando o T.I.A.O",
+            font=("Arial", 24, "bold"),
+            fg=CORES_TIAO["azul"]
+        ).pack(pady=30)
+
+        self.criar_label(
+            self.root,
+            textvariable=self.status_texto,
+            font=("Arial", 16),
+            wraplength=780,
+            justify="center",
+            fg=CORES_TIAO["azul_escuro"],
+            bg=CORES_TIAO["branco"],
+            padx=18,
+            pady=16,
+            relief="solid",
+            bd=1
+        ).pack(padx=35, pady=30, fill="x")
+
+        self.criar_label(
+            self.root,
+            text="Siga as instruções do LCD e da voz do sistema.",
+            font=("Arial", 14),
+            fg=CORES_TIAO["verde_escuro"]
+        ).pack(pady=10)
+
+        if MODO_SIMULADO:
+            self.criar_botao(
+                self.root,
+                text="Simular atendimento",
+                cor=CORES_TIAO["amarelo"],
+                fg=CORES_TIAO["grafite"],
+                activeforeground=CORES_TIAO["grafite"],
+                command=self.iniciar_simulacao
+            ).pack(pady=20)
+
+        self.mostrar_rodape_cores()
+
+    def tela_resultado(self, ficha):
+        self.mudar_estado("resultado")
+
+        self.limpar_tela()
+
+        cor = ficha["risco_final"]
+        cor_risco = CORES_RISCO.get(cor, CORES_TIAO["azul"])
+        mensagem_fila = self.mensagem_final_fila(ficha["numero"])
+
+        self.criar_label(
+            self.root,
+            text="Resultado final",
+            font=("Arial", 24, "bold"),
+            fg=CORES_TIAO["azul"]
+        ).pack(pady=20)
+
+        self.criar_label(
+            self.root,
+            text=f"Classificação: {cor}",
+            font=("Arial", 22, "bold"),
+            fg=cor_risco
+        ).pack(pady=10)
+
+        self.criar_label(
+            self.root,
+            text=mensagem_fila,
+            font=("Arial", 17, "bold"),
+            fg=CORES_TIAO["azul_escuro"],
+            bg=CORES_TIAO["branco"],
+            wraplength=780,
+            justify="center",
+            padx=18,
+            pady=14,
+            relief="solid",
+            bd=1
+        ).pack(padx=35, pady=10, fill="x")
+
+        texto = (
+            f"Número do atendimento: {ficha['numero']}\n"
+            f"Sintomas: {', '.join(ficha['sintomas']) if ficha['sintomas'] else 'Nenhum'}\n"
+            f"Risco dos sintomas: {ficha['risco_sintomas']}\n"
+            f"Temperatura: {formatar_float(ficha['temp'], ' °C')}\n"
+            f"BPM: {formatar_valor(ficha['bpm'])}\n"
+            f"SpO2: {formatar_valor(ficha['spo2'], '%')}\n"
+            f"Risco dos sensores: {ficha['risco_sensores'] if ficha['risco_sensores'] != 'IGNORAR' else 'indisponível'}\n"
+            f"Classificação final: {ficha['risco_final']}\n\n"
+            "Protótipo acadêmico. Não representa diagnóstico médico."
+        )
+
+        self.criar_label(
+            self.root,
+            text=texto,
+            font=("Arial", 14),
+            justify="left",
+            bg=CORES_TIAO["branco"],
+            padx=20,
+            pady=14
+        ).pack(pady=20)
+
+        self.criar_botao(
+            self.root,
+            text="Novo atendimento",
+            cor=CORES_TIAO["verde"],
+            command=self.tela_menu
+        ).pack(pady=15)
+
+        self.mostrar_rodape_cores()
+
+        # Volta automaticamente depois de 10 segundos
+        self.root.after(10000, self.tela_menu)
+
+    def tela_historico(self):
+        self.mudar_estado("historico")
+        self.limpar_tela()
+
+        self.criar_label(
+            self.root,
+            text="Histórico de fichas",
+            font=("Arial", 22, "bold"),
+            fg=CORES_TIAO["azul"]
+        ).pack(pady=15)
+
+        filtro_var = tk.StringVar(value="TODOS")
+
+        filtro_frame = self.criar_frame(self.root)
+        filtro_frame.pack(pady=5)
+
+        self.criar_label(filtro_frame, text="Filtro:", font=("Arial", 11, "bold")).grid(row=0, column=0, padx=5)
+
+        combo = ttk.Combobox(
+            filtro_frame,
+            textvariable=filtro_var,
+            values=["TODOS", "VERDE", "AMARELO", "VERMELHO"],
+            state="readonly",
+            width=15
+        )
+        combo.grid(row=0, column=1, padx=5)
+
+        texto = tk.Text(
+            self.root,
+            width=110,
+            height=22,
+            bg=CORES_TIAO["branco"],
+            fg=CORES_TIAO["grafite"],
+            insertbackground=CORES_TIAO["azul"],
+            relief="solid",
+            bd=1
+        )
+        texto.pack(pady=10)
+
+        def carregar():
+            texto.delete("1.0", tk.END)
+
+            if not os.path.exists(ARQUIVO_CSV):
+                texto.insert(tk.END, "Nenhuma ficha salva ainda.")
+                return
+
+            filtro = filtro_var.get()
+
+            with open(ARQUIVO_CSV, "r", encoding="utf-8") as arquivo:
+                linhas = arquivo.readlines()
+
+            if not linhas:
+                texto.insert(tk.END, "Arquivo CSV vazio.")
+                return
+
+            texto.insert(tk.END, linhas[0])
+            texto.insert(tk.END, "-" * 130 + "\n")
+
+            for linha in linhas[1:]:
+                if filtro == "TODOS" or f";{filtro};" in linha:
+                    texto.insert(tk.END, linha)
+
+        botoes = self.criar_frame(self.root)
+        botoes.pack(pady=10)
+
+        self.criar_botao(
+            botoes,
+            text="Atualizar",
+            command=carregar,
+            cor=CORES_TIAO["azul"],
+            width=15
+        ).grid(row=0, column=0, padx=10)
+
+        self.criar_botao(
+            botoes,
+            text="Voltar",
+            command=self.tela_menu,
+            cor=CORES_TIAO["cinza"],
+            width=15
+        ).grid(row=0, column=1, padx=10)
+
+        carregar()
+        self.mostrar_rodape_cores()
+
+    # ========================================================
+    # PROCESSAMENTO SERIAL
+    # ========================================================
+
+    def processar_fila_ui(self):
+        while not self.fila_ui.empty():
+            tipo, conteudo = self.fila_ui.get()
+
+            if tipo == "serial":
+                self.processar_linha_serial(conteudo)
+
+            elif tipo == "erro_serial":
+                print("[ERRO SERIAL]", conteudo)
+                falar(FRASES["ERRO_SERIAL"])
+
+        self.root.after(200, self.processar_fila_ui)
+
+    def processar_linha_serial(self, linha):
+        print("[ARDUINO]", linha)
+
+        dados = interpretar_linha(linha)
+
+        if linha.startswith("EVENT:"):
+            self.processar_evento(linha)
+            return
+
+        if linha.startswith("STATUS:"):
+            self.processar_status(linha, dados)
+            return
+
+        if self.eh_linha_final(dados):
+            self.processar_dados_finais(dados)
+            return
+
+    def processar_evento(self, linha):
+        if not self.atendimento_ativo:
+            return
+
+        if linha == "EVENT:PACIENTE_DETECTADO":
+            self.mudar_estado("confirmando_presenca", FRASES["PRESENCA"])
+            self.status_texto.set("Paciente detectado. Fique parado para confirmar presença.")
+
+        elif linha == "EVENT:PRESENCA_PERDIDA":
+            self.mudar_estado("aguardando_robo", "Presença perdida. Aproxime-se novamente do sensor frontal.")
+            self.status_texto.set("Presença perdida. Aproxime-se novamente.")
+
+        elif linha == "EVENT:MEDICAO_INICIADA":
+            self.mudar_estado("medindo", FRASES["MEDICAO"])
+            falar(FRASES["OXIMETRIA"])
+            self.status_texto.set("Medição iniciada. Mantenha-se parado.")
+
+        elif linha == "EVENT:MEDICAO_FINALIZADA":
+            self.mudar_estado("aguardando_resultado", FRASES["RESULTADO"])
+            self.status_texto.set("Medição finalizada. Calculando resultado.")
+
+        elif linha == "EVENT:RESULTADO_RECEBIDO":
+            print("[INFO] Arduino recebeu o resultado.")
+
+        elif linha == "EVENT:CICLO_REINICIADO":
+            falar(FRASES["REINICIANDO"])
+
+    def processar_status(self, linha, dados):
+        if not self.atendimento_ativo:
+            return
+
+        if linha.startswith("STATUS:AGUARDANDO"):
+            distancia = dados.get("DIST", "---")
+            self.status_texto.set(f"Aguardando paciente. Distância: {distancia} cm.")
+
+        elif linha.startswith("STATUS:CONFIRMANDO"):
+            tempo_ms = converter_int(dados.get("TEMPO")) or 0
+            segundos = min(TEMPO_CONFIRMACAO_PRESENCA_SEGUNDOS, tempo_ms // 1000)
+            self.status_texto.set(
+                f"Confirmando presença: {segundos}/{TEMPO_CONFIRMACAO_PRESENCA_SEGUNDOS} segundos."
+            )
+
+        elif linha.startswith("STATUS:MEDINDO"):
+            tempo = dados.get("TEMPO", "0")
+
+            temp = converter_float(dados.get("TEMP"))
+            bpm = converter_int(dados.get("BPM"))
+            spo2 = converter_int(dados.get("SPO2"))
+
+            self.status_texto.set(
+                f"Medição em andamento: {tempo}/22 segundos\n"
+                f"Temperatura: {formatar_float(temp, ' °C')}\n"
+                f"BPM: {formatar_valor(bpm)}\n"
+                f"SpO2: {formatar_valor(spo2, '%')}"
+            )
+
+    def eh_linha_final(self, dados):
+        return (
+            "PRESENCA" in dados
+            and (
+                "TEMP" in dados
+                or "BPM" in dados
+                or "SPO2" in dados
+            )
+        )
+
+    def processar_dados_finais(self, dados):
+        if not self.atendimento_ativo:
+            return
+
+        try:
+            presenca = converter_int(dados.get("PRESENCA"))
+
+            if presenca != 1:
+                return
+
+            temp = converter_float(dados.get("TEMP"))
+            bpm = converter_int(dados.get("BPM"))
+            spo2 = converter_int(dados.get("SPO2"))
+
+            risco_sintomas = classificar_sintomas(self.sintomas_selecionados)
+
+            c_temp = classificar_temperatura(temp)
+            c_bpm = classificar_bpm(bpm)
+            c_spo2 = classificar_spo2(spo2)
+
+            risco_sensores = combinar_riscos([c_temp, c_bpm, c_spo2])
+
+            if risco_sensores == "IGNORAR":
+                risco_final = risco_sintomas
+            else:
+                risco_final = combinar_riscos([risco_sintomas, risco_sensores])
+
+            if risco_final == "IGNORAR":
+                risco_final = "VERDE"
+
+            self.enviar_para_arduino(f"RISCO:{risco_final}\n")
+
+            ficha = {
+                "numero": self.numero_atendimento,
+                "sintomas": self.sintomas_selecionados,
+                "risco_sintomas": risco_sintomas,
+                "temp": temp,
+                "bpm": bpm,
+                "spo2": spo2,
+                "risco_sensores": risco_sensores,
+                "risco_final": risco_final,
+            }
+
+            salvar_ficha(
+                self.numero_atendimento,
+                self.sintomas_selecionados,
+                risco_sintomas,
+                temp,
+                bpm,
+                spo2,
+                risco_sensores,
+                risco_final
+            )
+
+            falar(mensagem_resultado(
+                risco_final,
+                self.sintomas_selecionados,
+                temp,
+                bpm,
+                spo2
+            ))
+
+            self.numero_atendimento += 1
+            self.atendimento_ativo = False
+            self.tela_resultado(ficha)
+
+        except Exception as erro:
+            print("[ERRO DADOS]", erro)
+            falar(FRASES["ERRO_DADOS"])
+            self.enviar_para_arduino("RISCO:ERRO\n")
+
+    # ========================================================
+    # VOZ REPETIDA
+    # ========================================================
+
+    def repetir_voz_por_estado(self):
+        agora = time.time()
+
+        if self.estado in INTERVALOS_VOZ:
+            intervalo = INTERVALOS_VOZ[self.estado]
+            ultimo = self.ultimo_aviso_estado.get(self.estado, 0)
+
+            if agora - ultimo >= intervalo:
+                self.ultimo_aviso_estado[self.estado] = agora
+
+                if self.estado == "menu":
+                    falar(FRASES["MENU"])
+
+                elif self.estado == "confirmacao_sintomas":
+                    falar(FRASES["SINTOMAS_CONFIRMADOS"])
+
+                elif self.estado == "aguardando_robo":
+                    falar(FRASES["AGUARDANDO"])
+
+                elif self.estado == "confirmando_presenca":
+                    falar(FRASES["CONFIRMANDO"])
+
+                elif self.estado == "medindo":
+                    falar(FRASES["MEDINDO"])
+
+                elif self.estado == "aguardando_resultado":
+                    falar(FRASES["RESULTADO"])
+
+        self.root.after(1000, self.repetir_voz_por_estado)
+
+    # ========================================================
+    # SIMULAÇÃO
+    # ========================================================
+
+    def iniciar_simulacao(self):
+        if not MODO_SIMULADO:
+            return
+
+        thread = threading.Thread(target=self.simular_fluxo, daemon=True)
+        thread.start()
+
+    def simular_fluxo(self):
+        linhas = [
+            "EVENT:PACIENTE_DETECTADO",
+            "STATUS:CONFIRMANDO;DIST:45;TEMPO:2000",
+            "STATUS:CONFIRMANDO;DIST:44;TEMPO:5000",
+            "EVENT:MEDICAO_INICIADA",
+            "STATUS:MEDINDO;TEMPO:5;TEMP:36.7;BPM:80;SPO2:98",
+            "STATUS:MEDINDO;TEMPO:10;TEMP:36.8;BPM:82;SPO2:98",
+            "STATUS:MEDINDO;TEMPO:15;TEMP:36.8;BPM:83;SPO2:97",
+            "STATUS:MEDINDO;TEMPO:22;TEMP:36.9;BPM:82;SPO2:98",
+            "EVENT:MEDICAO_FINALIZADA",
+            "TEMP:36.8;BPM:82;SPO2:98;PRESENCA:1",
+        ]
+
+        for linha in linhas:
+            time.sleep(2)
+            self.fila_ui.put(("serial", linha))
+
+    # ========================================================
+    # UTILITÁRIOS
+    # ========================================================
+
+    def proximo_numero_atendimento(self):
+        if not os.path.exists(ARQUIVO_CSV):
+            return 1
+
+        try:
+            with open(ARQUIVO_CSV, "r", encoding="utf-8") as arquivo:
+                linhas = arquivo.readlines()
+
+            return max(1, len(linhas))
+        except Exception:
+            return 1
+
+    def fechar(self):
+        try:
+            if self.serial:
+                self.serial.close()
+        except Exception:
+            pass
+
+        fila_voz.put(None)
+        self.root.destroy()
+
+
+# ============================================================
+# INICIAR APP
+# ============================================================
+
+if __name__ == "__main__":
+    preparar_csv()
+
+    root = tk.Tk()
+    app = TiaoApp(root)
+    root.protocol("WM_DELETE_WINDOW", app.fechar)
+    root.mainloop()
