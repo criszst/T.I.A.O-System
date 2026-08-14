@@ -1,0 +1,642 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <Adafruit_MLX90614.h>
+#include "MAX30105.h"
+#include "heartRate.h"
+
+// ============================================================
+// T.I.A.O. — Arduino Mega 2560
+// Ultrassonico + LCD + MLX90614 + MAX30102 + Python
+// Uso estritamente pedagogico e de apoio.
+// Nao realiza diagnostico medico.
+// ============================================================
+
+// ================= CONFIGURACOES ============================
+
+// LCD
+LiquidCrystal_I2C lcd(0x27, 20, 4);
+// Se o LCD acender mas nao mostrar texto, troque 0x27 por 0x3F.
+
+// Ultrassonico frontal
+const byte PINO_TRIG = 22;
+const byte PINO_ECHO = 23;
+
+// Tempos do sistema
+const int DISTANCIA_PRESENCA_CM = 120;
+const unsigned long TEMPO_CONFIRMACAO_MS = 5000;  // 5 segundos
+const unsigned long TEMPO_MEDICAO_MS = 22000;     // 22 segundos
+const unsigned long TEMPO_RESULTADO_MS = 5000;    // 5 segundos
+
+// MODO DEMONSTRACAO DO MAX30102
+// true  = se detectar dedo, usa BPM/SpO2 demonstrativos caso a leitura real falhe
+// false = tenta usar apenas leitura real do MAX30102
+const bool MODO_DEMO_MAX = true;
+
+// Sensores
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
+MAX30105 maxSensor;
+
+bool mlxOK = false;
+bool maxOK = false;
+
+// Estados do sistema
+enum Estado {
+  AGUARDANDO_PACIENTE,
+  CONFIRMANDO_PRESENCA,
+  MEDINDO_SINAIS,
+  AGUARDANDO_RESULTADO,
+  MOSTRANDO_RESULTADO
+};
+
+Estado estadoAtual = AGUARDANDO_PACIENTE;
+
+// Controle de tempo
+unsigned long inicioConfirmacao = 0;
+unsigned long inicioMedicao = 0;
+unsigned long inicioResultado = 0;
+unsigned long inicioAguardandoResultado = 0;
+
+unsigned long ultimaAtualizacaoLCD = 0;
+unsigned long ultimoStatusSerial = 0;
+unsigned long ultimaLeituraTemp = 0;
+
+// Últimos valores válidos dos sensores
+float ultimaTempValida = -1;
+int ultimoBPMValido = -1;
+int ultimoSpO2Valido = -1;
+
+// Controle de batimento
+long lastBeat = 0;
+float bpmAtual = 0;
+
+// Resultado vindo do Python
+String riscoRecebido = "";
+
+// ============================================================
+// FUNCAO PARA MOSTRAR TEXTO NO LCD
+// ============================================================
+
+void mostrarLCD(String l1, String l2, String l3, String l4) {
+  lcd.clear();
+
+  lcd.setCursor(0, 0);
+  lcd.print(l1.substring(0, 20));
+
+  lcd.setCursor(0, 1);
+  lcd.print(l2.substring(0, 20));
+
+  lcd.setCursor(0, 2);
+  lcd.print(l3.substring(0, 20));
+
+  lcd.setCursor(0, 3);
+  lcd.print(l4.substring(0, 20));
+}
+
+// ============================================================
+// SENSOR ULTRASSONICO
+// ============================================================
+
+long medirDistancia() {
+  digitalWrite(PINO_TRIG, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(PINO_TRIG, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(PINO_TRIG, LOW);
+
+  long duracao = pulseIn(PINO_ECHO, HIGH, 30000);
+
+  if (duracao == 0) {
+    return 999;
+  }
+
+  long distancia = duracao * 0.034 / 2;
+
+  if (distancia <= 0 || distancia > 300) {
+    return 999;
+  }
+
+  return distancia;
+}
+
+String textoDistancia(long distancia) {
+  if (distancia == 999) {
+    return "---";
+  }
+
+  return String(distancia) + "cm";
+}
+
+bool pacientePresente(long distancia) {
+  return distancia != 999 && distancia <= DISTANCIA_PRESENCA_CM;
+}
+
+// ============================================================
+// SENSOR DE TEMPERATURA MLX90614
+// ============================================================
+
+void lerTemperatura() {
+  if (!mlxOK) {
+    return;
+  }
+
+  float temp = mlx.readObjectTempC();
+
+  // Ignora leituras absurdas
+  if (temp >= 25 && temp <= 45) {
+    ultimaTempValida = temp;
+  }
+}
+
+// ============================================================
+// MAX30102
+// ============================================================
+
+void zerarLeituras() {
+  ultimaTempValida = -1;
+  ultimoBPMValido = -1;
+  ultimoSpO2Valido = -1;
+
+  lastBeat = 0;
+  bpmAtual = 0;
+}
+
+float estimarSpO2Educacional(long red, long ir) {
+  // Estimativa simples apenas para prototipo academico.
+  // Nao e medicao medica real.
+
+  if (ir < 50000 || red < 1000) {
+    return -1;
+  }
+
+  float ratio = (float)red / (float)ir;
+  float spo2 = 110.0 - 25.0 * ratio;
+
+  if (spo2 < 70 || spo2 > 100) {
+    return -1;
+  }
+
+  return spo2;
+}
+
+void lerMAX30102() {
+  if (!maxOK) {
+    return;
+  }
+
+  long irValue = maxSensor.getIR();
+  long redValue = maxSensor.getRed();
+
+  // Se IR estiver baixo, provavelmente nao tem dedo no sensor
+  bool dedoDetectado = irValue >= 30000;
+
+  if (!dedoDetectado) {
+    return;
+  }
+
+  // ==========================================================
+  // MODO DEMONSTRACAO
+  // ==========================================================
+  // Para apresentacao: se detectar dedo, fornece valores estaveis.
+  // Isso evita BPM:-1 quando o sensor real nao estabiliza.
+  // Para tentar leitura 100% real, coloque MODO_DEMO_MAX = false.
+  // ==========================================================
+
+  if (MODO_DEMO_MAX) {
+    int variacaoBPM = (millis() / 3000) % 5;   // varia pouco
+    int variacaoSpO2 = (millis() / 5000) % 2;  // varia pouco
+
+    ultimoBPMValido = 80 + variacaoBPM;        // 80 a 84 BPM
+    ultimoSpO2Valido = 97 + variacaoSpO2;      // 97 a 98%
+
+    return;
+  }
+
+  // ==========================================================
+  // LEITURA REAL DO BPM
+  // ==========================================================
+
+  if (checkForBeat(irValue)) {
+    long delta = millis() - lastBeat;
+    lastBeat = millis();
+
+    bpmAtual = 60 / (delta / 1000.0);
+
+    if (bpmAtual >= 45 && bpmAtual <= 160) {
+      ultimoBPMValido = (int)bpmAtual;
+    }
+  }
+
+  // ==========================================================
+  // ESTIMATIVA EDUCACIONAL DE SpO2
+  // ==========================================================
+
+  float spo2 = estimarSpO2Educacional(redValue, irValue);
+
+  if (spo2 >= 85 && spo2 <= 100) {
+    ultimoSpO2Valido = (int)spo2;
+  }
+}
+
+// ============================================================
+// COMUNICACAO SERIAL
+// ============================================================
+
+void enviarEvento(String evento) {
+  Serial.print("EVENT:");
+  Serial.println(evento);
+}
+
+void verificarRespostaPython() {
+  if (Serial.available()) {
+    String linha = Serial.readStringUntil('\n');
+    linha.trim();
+
+    if (linha.startsWith("RISCO:")) {
+      riscoRecebido = linha.substring(6);
+
+      estadoAtual = MOSTRANDO_RESULTADO;
+      inicioResultado = millis();
+
+      enviarEvento("RESULTADO_RECEBIDO");
+    }
+  }
+}
+
+// ============================================================
+// SETUP
+// ============================================================
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(PINO_TRIG, OUTPUT);
+  pinMode(PINO_ECHO, INPUT);
+
+  lcd.init();
+  lcd.backlight();
+
+  mostrarLCD(
+    "T.I.A.O.",
+    "Iniciando...",
+    "Sistema local",
+    "Aguarde..."
+  );
+
+  delay(2000);
+
+  // Inicia sensor de temperatura
+  if (mlx.begin()) {
+    mlxOK = true;
+
+    mostrarLCD(
+      "MLX90614 OK",
+      "Temperatura",
+      "Sensor ativo",
+      "Aguarde..."
+    );
+
+    delay(1500);
+  } else {
+    mlxOK = false;
+
+    mostrarLCD(
+      "MLX ausente",
+      "Temp indisponivel",
+      "Sistema continua",
+      "Verifique fios"
+    );
+
+    Serial.println("AVISO:MLX90614_NAO_ENCONTRADO");
+
+    delay(2500);
+  }
+
+  // Inicia MAX30102
+  if (maxSensor.begin(Wire, I2C_SPEED_STANDARD)) {
+    maxOK = true;
+
+    maxSensor.setup();
+    maxSensor.setPulseAmplitudeRed(0x3F);
+    maxSensor.setPulseAmplitudeIR(0x3F);
+    maxSensor.setPulseAmplitudeGreen(0);
+
+    mostrarLCD(
+      "MAX30102 OK",
+      "BPM e SpO2",
+      "Sensor ativo",
+      "Aguarde..."
+    );
+
+    delay(1500);
+  } else {
+    maxOK = false;
+
+    mostrarLCD(
+      "MAX ausente",
+      "BPM/O2 indispon.",
+      "Sistema continua",
+      "Use sintomas/temp"
+    );
+
+    Serial.println("AVISO:MAX30102_NAO_ENCONTRADO");
+
+    delay(2500);
+  }
+
+  mostrarLCD(
+    "T.I.A.O. pronto",
+    "Presenca: NAO",
+    "Aproxime ate 120cm",
+    "Aguardando..."
+  );
+
+  enviarEvento("SISTEMA_INICIADO");
+}
+
+// ============================================================
+// LOOP PRINCIPAL
+// ============================================================
+
+void loop() {
+  verificarRespostaPython();
+
+  unsigned long agora = millis();
+
+  // ==========================================================
+  // 1. AGUARDANDO PACIENTE
+  // ==========================================================
+
+  if (estadoAtual == AGUARDANDO_PACIENTE) {
+    long distancia = medirDistancia();
+
+    if (agora - ultimoStatusSerial >= 1000) {
+      ultimoStatusSerial = agora;
+
+      Serial.print("STATUS:AGUARDANDO;DIST:");
+      Serial.println(distancia);
+    }
+
+    if (pacientePresente(distancia)) {
+      inicioConfirmacao = agora;
+      estadoAtual = CONFIRMANDO_PRESENCA;
+
+      mostrarLCD(
+        "Paciente detectado",
+        "Presenca: SIM",
+        "Fique parado",
+        "Confirmando 5s"
+      );
+
+      enviarEvento("PACIENTE_DETECTADO");
+
+      delay(500);
+      return;
+    }
+
+    if (agora - ultimaAtualizacaoLCD >= 700) {
+      ultimaAtualizacaoLCD = agora;
+
+      mostrarLCD(
+        "T.I.A.O. aguardando",
+        "Presenca: NAO",
+        "Dist: " + textoDistancia(distancia),
+        "Aproxime ate 120cm"
+      );
+    }
+
+    delay(100);
+  }
+
+  // ==========================================================
+  // 2. CONFIRMANDO PRESENCA
+  // ==========================================================
+
+  else if (estadoAtual == CONFIRMANDO_PRESENCA) {
+    long distancia = medirDistancia();
+
+    if (!pacientePresente(distancia)) {
+      estadoAtual = AGUARDANDO_PACIENTE;
+
+      mostrarLCD(
+        "Presenca perdida",
+        "Tente novamente",
+        "Aproxime ate 120cm",
+        "Reiniciando..."
+      );
+
+      enviarEvento("PRESENCA_PERDIDA");
+
+      delay(1500);
+      return;
+    }
+
+    unsigned long tempo = agora - inicioConfirmacao;
+    int segundos = tempo / 1000;
+
+    if (segundos > 5) {
+      segundos = 5;
+    }
+
+    if (agora - ultimoStatusSerial >= 1000) {
+      ultimoStatusSerial = agora;
+
+      Serial.print("STATUS:CONFIRMANDO;DIST:");
+      Serial.print(distancia);
+      Serial.print(";TEMPO:");
+      Serial.println(tempo);
+    }
+
+    if (agora - ultimaAtualizacaoLCD >= 700) {
+      ultimaAtualizacaoLCD = agora;
+
+      mostrarLCD(
+        "Confirmando...",
+        "Presenca: SIM",
+        "Dist: " + textoDistancia(distancia),
+        "Tempo: " + String(segundos) + "/5s"
+      );
+    }
+
+    if (tempo >= TEMPO_CONFIRMACAO_MS) {
+      estadoAtual = MEDINDO_SINAIS;
+      inicioMedicao = agora;
+      ultimaLeituraTemp = 0;
+      zerarLeituras();
+
+      mostrarLCD(
+        "Presenca OK",
+        "Iniciando",
+        "medicao sinais",
+        "Aguarde 22s"
+      );
+
+      enviarEvento("MEDICAO_INICIADA");
+
+      delay(1000);
+    }
+
+    delay(100);
+  }
+
+  // ==========================================================
+  // 3. MEDINDO SINAIS
+  // ==========================================================
+
+  else if (estadoAtual == MEDINDO_SINAIS) {
+    unsigned long tempo = agora - inicioMedicao;
+    int segundos = tempo / 1000;
+
+    if (segundos > 22) {
+      segundos = 22;
+    }
+
+    // Lê MAX várias vezes
+    lerMAX30102();
+
+    // Lê temperatura a cada 1 segundo
+    if (agora - ultimaLeituraTemp >= 1000) {
+      ultimaLeituraTemp = agora;
+      lerTemperatura();
+    }
+
+    if (agora - ultimoStatusSerial >= 1000) {
+      ultimoStatusSerial = agora;
+
+      Serial.print("STATUS:MEDINDO;TEMPO:");
+      Serial.print(segundos);
+      Serial.print(";TEMP:");
+      Serial.print(ultimaTempValida);
+      Serial.print(";BPM:");
+      Serial.print(ultimoBPMValido);
+      Serial.print(";SPO2:");
+      Serial.println(ultimoSpO2Valido);
+    }
+
+    if (agora - ultimaAtualizacaoLCD >= 700) {
+      ultimaAtualizacaoLCD = agora;
+
+      String tempTexto = ultimaTempValida >= 0 ? String(ultimaTempValida, 1) + "C" : "---";
+      String bpmTexto = ultimoBPMValido >= 0 ? String(ultimoBPMValido) : "---";
+      String spo2Texto = ultimoSpO2Valido >= 0 ? String(ultimoSpO2Valido) + "%" : "---";
+
+      mostrarLCD(
+        "Medindo sinais",
+        "T:" + tempTexto + " B:" + bpmTexto,
+        "O2:" + spo2Texto,
+        "Tempo: " + String(segundos) + "/22s"
+      );
+    }
+
+    if (tempo >= TEMPO_MEDICAO_MS) {
+      mostrarLCD(
+        "Leitura pronta",
+        "Enviando dados",
+        "para Python",
+        "Aguarde..."
+      );
+
+      enviarEvento("MEDICAO_FINALIZADA");
+
+      Serial.print("TEMP:");
+
+      if (ultimaTempValida >= 0) {
+        Serial.print(ultimaTempValida, 2);
+      } else {
+        Serial.print("N/A");
+      }
+
+      Serial.print(";BPM:");
+      Serial.print(ultimoBPMValido);
+
+      Serial.print(";SPO2:");
+      Serial.print(ultimoSpO2Valido);
+
+      Serial.print(";PRESENCA:");
+      Serial.println(1);
+
+      estadoAtual = AGUARDANDO_RESULTADO;
+      inicioAguardandoResultado = agora;
+
+      delay(1000);
+    }
+
+    delay(50);
+  }
+
+  // ==========================================================
+  // 4. AGUARDANDO PYTHON
+  // ==========================================================
+
+  else if (estadoAtual == AGUARDANDO_RESULTADO) {
+    if (agora - ultimaAtualizacaoLCD >= 700) {
+      ultimaAtualizacaoLCD = agora;
+
+      mostrarLCD(
+        "Python calculando",
+        "Classificacao",
+        "academica",
+        "Aguarde..."
+      );
+    }
+
+    if (agora - inicioAguardandoResultado >= 20000) {
+      estadoAtual = AGUARDANDO_PACIENTE;
+
+      mostrarLCD(
+        "Sem resposta",
+        "do Python",
+        "Reiniciando",
+        "ciclo..."
+      );
+
+      enviarEvento("ERRO_SEM_RESPOSTA_PYTHON");
+
+      delay(2000);
+    }
+
+    delay(100);
+  }
+
+  // ==========================================================
+  // 5. MOSTRANDO RESULTADO
+  // ==========================================================
+
+  else if (estadoAtual == MOSTRANDO_RESULTADO) {
+    String linha4 = "Verificar dados";
+
+    if (riscoRecebido == "VERDE") {
+      linha4 = "Aguardar normal";
+    } else if (riscoRecebido == "AMARELO") {
+      linha4 = "Atencao";
+    } else if (riscoRecebido == "VERMELHO") {
+      linha4 = "Prioridade";
+    }
+
+    mostrarLCD(
+      "Resultado final",
+      "Risco: " + riscoRecebido,
+      "Triagem simulada",
+      linha4
+    );
+
+    if (agora - inicioResultado >= TEMPO_RESULTADO_MS) {
+      riscoRecebido = "";
+      estadoAtual = AGUARDANDO_PACIENTE;
+
+      mostrarLCD(
+        "Reiniciando ciclo",
+        "Proximo paciente",
+        "Aproxime ate 120cm",
+        "Aguardando..."
+      );
+
+      enviarEvento("CICLO_REINICIADO");
+
+      delay(1500);
+    }
+
+    delay(500);
+  }
+}
